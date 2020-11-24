@@ -5,8 +5,8 @@
 // @description Replaces twitch.tv hls stitched segments.
 // @author      adeFuLoDgu
 // @include     *://*.twitch.tv/*
-// @updateURL
-// @downloadURL
+// @updateURL   https://github.com/adeFuLoDgu/Twitch-worker-intection/raw/main/Twitch_worker_intection.user.js
+// @downloadURL https://github.com/adeFuLoDgu/Twitch-worker-intection/raw/main/Twitch_worker_intection.user.js
 // @run-at      document-end
 // @grant       none
 // ==/UserScript==
