@@ -1,4 +1,4 @@
-# Twitch-worker-intection
+# Twitch worker intection
 Replaces twitch.tv hls stitched segments. Originated from [this gist](https://gist.github.com/pixeltris/77c676ef65b0b76e7aa56d8a0e0b3897).
 
 ## Prerequisites
