@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name        Twitch worker intection
-// @namespace   http://tampermonkey.net/
+// @namespace   https://github.com/adeFuLoDgu/Twitch-worker-intection
 // @Version     0.1
 // @description Replaces twitch.tv hls stitched segments.
 // @author      adeFuLoDgu
