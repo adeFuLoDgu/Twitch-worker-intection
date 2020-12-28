@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        Twitch worker intection
 // @namespace   https://github.com/adeFuLoDgu/Twitch-worker-intection
-// @Version     0.3
+// @Version     0.4
 // @description Replaces twitch.tv hls stitched segments.
 // @author      adeFuLoDgu
 // @include     *://*.twitch.tv/*
@@ -18,11 +18,13 @@
         scope.OPT_MODE_MUTE_BLACK = false;
         scope.OPT_MODE_VIDEO_SWAP = false;
         scope.OPT_MODE_LOW_RES = false;
+        scope.OPT_MODE_EMBED = false;
         scope.OPT_MODE_STRIP_AD_SEGMENTS = true;
         scope.OPT_MODE_NOTIFY_ADS_WATCHED = false;
         scope.OPT_MODE_NOTIFY_ADS_WATCHED_ATTEMPTS = 2;// Larger values might increase load time. Lower values may increase ad chance.
         scope.OPT_MODE_NOTIFY_ADS_WATCHED_MIN_REQUESTS = true;
         scope.OPT_MODE_NOTIFY_ADS_WATCHED_RELOAD_PLAYER_ON_AD_SEGMENT = false;
+        scope.OPT_MODE_PROXY_M3U8 = '';
         scope.OPT_VIDEO_SWAP_PLAYER_TYPE = 'thunderdome';
         scope.OPT_INITIAL_M3U8_ATTEMPTS = 1;
         scope.OPT_ACCESS_TOKEN_PLAYER_TYPE = '';
@@ -33,6 +35,9 @@
         if (!scope.OPT_ACCESS_TOKEN_PLAYER_TYPE && scope.OPT_MODE_LOW_RES) {
             scope.OPT_ACCESS_TOKEN_PLAYER_TYPE = 'thunderdome';//480p
             //scope.OPT_ACCESS_TOKEN_PLAYER_TYPE = 'picture-by-picture';//360p
+        }
+        if (!scope.OPT_ACCESS_TOKEN_PLAYER_TYPE && scope.OPT_MODE_EMBED) {
+            scope.OPT_ACCESS_TOKEN_PLAYER_TYPE = 'embed';
         }
         // These are only really for Worker scope...
         scope.StreamInfos = [];
@@ -243,52 +248,60 @@
                         };
                         send();
                     });
-                } else if (url.includes('/api/channel/hls/') && !url.includes('picture-by-picture') && OPT_MODE_STRIP_AD_SEGMENTS) {
-                    return new Promise(async function(resolve, reject) {
-                        // - First m3u8 request is the m3u8 with the video encodings (360p,480p,720p,etc).
-                        // - Second m3u8 request is the m3u8 for the given encoding obtained in the first request. At this point we will know if there's ads.
-                        var maxAttempts = OPT_INITIAL_M3U8_ATTEMPTS <= 0 ? 1 : OPT_INITIAL_M3U8_ATTEMPTS;
-                        var attempts = 0;
-                        while(true) {
-                            var encodingsM3u8Response = await realFetch(url, options);
-                            if (encodingsM3u8Response.status === 200) {
-                                var encodingsM3u8 = await encodingsM3u8Response.text();
-                                var streamM3u8Url = encodingsM3u8.match(/^https:.*\.m3u8$/m)[0];
-                                var streamM3u8Response = await realFetch(streamM3u8Url);
-                                var streamM3u8 = await streamM3u8Response.text();
-                                if (!streamM3u8.includes(AD_SIGNIFIER) || ++attempts >= maxAttempts) {
-                                    if (maxAttempts > 1 && attempts >= maxAttempts) {
-                                        console.log('max skip ad attempts reached (attempt #' + attempts + ')');
-                                    }
-                                    var channelName = (new URL(url)).pathname.match(/([^\/]+)(?=\.\w+$)/)[0];
-                                    var streamInfo = StreamInfos[channelName];
-                                    if (streamInfo == null) {
-                                        StreamInfos[channelName] = streamInfo = {};
-                                    }
-                                    // This might potentially backfire... maybe just add the new urls
-                                    streamInfo.ChannelName = channelName;
-                                    streamInfo.Urls = [];
-                                    streamInfo.RootM3U8Params = (new URL(url)).search;
-                                    streamInfo.BackupUrl = null;
-                                    streamInfo.BackupFailed = false;
-                                    var lines = encodingsM3u8.replace('\r', '').split('\n');
-                                    for (var i = 0; i < lines.length; i++) {
-                                        if (!lines[i].startsWith('#') && lines[i].includes('.m3u8')) {
-                                            streamInfo.Urls.push(lines[i]);
-                                            StreamInfosByUrl[lines[i]] = streamInfo;
+                }
+                else if (url.includes('/api/channel/hls/') && !url.includes('picture-by-picture')) {
+                    if (OPT_MODE_PROXY_M3U8) {
+                        var channelName = (new URL(url)).pathname.match(/([^\/]+)(?=\.\w+$)/)[0];
+                        url = OPT_MODE_PROXY_M3U8 + channelName;
+                        console.log('Proxy: ' + url);
+                    }
+                    else if (OPT_MODE_STRIP_AD_SEGMENTS) {
+                        return new Promise(async function(resolve, reject) {
+                            // - First m3u8 request is the m3u8 with the video encodings (360p,480p,720p,etc).
+                            // - Second m3u8 request is the m3u8 for the given encoding obtained in the first request. At this point we will know if there's ads.
+                            var maxAttempts = OPT_INITIAL_M3U8_ATTEMPTS <= 0 ? 1 : OPT_INITIAL_M3U8_ATTEMPTS;
+                            var attempts = 0;
+                            while(true) {
+                                var encodingsM3u8Response = await realFetch(url, options);
+                                if (encodingsM3u8Response.status === 200) {
+                                    var encodingsM3u8 = await encodingsM3u8Response.text();
+                                    var streamM3u8Url = encodingsM3u8.match(/^https:.*\.m3u8$/m)[0];
+                                    var streamM3u8Response = await realFetch(streamM3u8Url);
+                                    var streamM3u8 = await streamM3u8Response.text();
+                                    if (!streamM3u8.includes(AD_SIGNIFIER) || ++attempts >= maxAttempts) {
+                                        if (maxAttempts > 1 && attempts >= maxAttempts) {
+                                            console.log('max skip ad attempts reached (attempt #' + attempts + ')');
                                         }
+                                        var channelName = (new URL(url)).pathname.match(/([^\/]+)(?=\.\w+$)/)[0];
+                                        var streamInfo = StreamInfos[channelName];
+                                        if (streamInfo == null) {
+                                            StreamInfos[channelName] = streamInfo = {};
+                                        }
+                                        // This might potentially backfire... maybe just add the new urls
+                                        streamInfo.ChannelName = channelName;
+                                        streamInfo.Urls = [];
+                                        streamInfo.RootM3U8Params = (new URL(url)).search;
+                                        streamInfo.BackupUrl = null;
+                                        streamInfo.BackupFailed = false;
+                                        var lines = encodingsM3u8.replace('\r', '').split('\n');
+                                        for (var i = 0; i < lines.length; i++) {
+                                            if (!lines[i].startsWith('#') && lines[i].includes('.m3u8')) {
+                                                streamInfo.Urls.push(lines[i]);
+                                                StreamInfosByUrl[lines[i]] = streamInfo;
+                                            }
+                                        }
+                                        resolve(new Response(encodingsM3u8));
+                                        break;
                                     }
-                                    resolve(new Response(encodingsM3u8));
+                                    console.log('attempt to skip ad (attempt #' + attempts + ')');
+                                } else {
+                                    // Stream is offline?
+                                    resolve(encodingsM3u8Response);
                                     break;
                                 }
-                                console.log('attempt to skip ad (attempt #' + attempts + ')');
-                            } else {
-                                // Stream is offline?
-                                resolve(encodingsM3u8Response);
-                                break;
                             }
-                        }
-                    });
+                        });
+                    }
                 }
             }
             return realFetch.apply(this, arguments);
@@ -625,12 +638,17 @@
             }
             return null;
         }
-        var reactRootNode = document.querySelector('#root')?._reactRootContainer?._internalRoot?.current;
+        var reactRootNode = null;
+        var rootNode = document.querySelector('#root');
+        if (rootNode && rootNode._reactRootContainer && rootNode._reactRootContainer._internalRoot && rootNode._reactRootContainer._internalRoot.current) {
+            reactRootNode = rootNode._reactRootContainer._internalRoot.current;
+        }
         if (!reactRootNode) {
             console.log('Could not find react root');
             return;
         }
-        var player = findReactNode(reactRootNode, node => node.setPlayerActive && node.props?.mediaPlayerInstance)?.props?.mediaPlayerInstance;
+        var player = findReactNode(reactRootNode, node => node.setPlayerActive && node.props && node.props.mediaPlayerInstance);
+        player = player && player.props && player.props.mediaPlayerInstance ? player.props.mediaPlayerInstance : null;
         var playerState = findReactNode(reactRootNode, node => node.setSrc && node.setInitialPlaybackSettings);
         if (!player) {
             console.log('Could not find player');
@@ -643,10 +661,10 @@
         if (player.paused) {
             return;
         }
-        const sink = player.mediaSinkManager || player.core?.mediaSinkManager;
-        if (sink?.video?._ffz_compressor) {
+        const sink = player.mediaSinkManager || (player.core ? player.core.mediaSinkManager : null);
+        if (sink && sink.video && sink.video._ffz_compressor) {
             const video = sink.video;
-            const volume = video.volume ?? player.getVolume();
+            const volume = video.volume ? video.volume : player.getVolume();
             const muted = player.isMuted();
             const newVideo = document.createElement('video');
             newVideo.volume = muted ? 0 : volume;
