@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        Twitch worker intection
 // @namespace   https://github.com/adeFuLoDgu/Twitch-worker-intection
-// @Version     0.5
+// @Version     0.6
 // @description Replaces twitch.tv hls stitched segments.
 // @author      adeFuLoDgu
 // @include     *://*.twitch.tv/*
