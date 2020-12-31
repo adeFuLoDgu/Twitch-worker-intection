@@ -26,6 +26,7 @@
         scope.OPT_MODE_NOTIFY_ADS_WATCHED_RELOAD_PLAYER_ON_AD_SEGMENT = false;
         scope.OPT_MODE_NOTIFY_ADS_WATCHED_RELOAD_PLAYER_ON_AD_SEGMENT_DELAY = 0;
         scope.OPT_MODE_PROXY_M3U8 = '';
+        scope.OPT_MODE_PROXY_M3U8_FULL_URL = false;
         scope.OPT_VIDEO_SWAP_PLAYER_TYPE = 'thunderdome';
         scope.OPT_INITIAL_M3U8_ATTEMPTS = 1;
         scope.OPT_ACCESS_TOKEN_PLAYER_TYPE = '';
@@ -87,6 +88,7 @@
             this.onmessage = function(e) {
                 if (e.data.key == 'UboShowAdBanner') {
                     if (adDiv == null) { adDiv = getAdDiv(); }
+                    adDiv.P.textContent = 'Waiting for' + (e.data.isMidroll ? ' midroll' : '') + ' ads to finish...';
                     adDiv.style.display = 'block';
                 }
                 else if (e.data.key == 'UboHideAdBanner') {
@@ -101,7 +103,6 @@
                 }
             }
             function getAdDiv() {
-                var msg = 'Waiting for ads to finish...';
                 var playerRootDiv = document.querySelector('.video-player');
                 var adDiv = null;
                 if (playerRootDiv != null) {
@@ -109,8 +110,9 @@
                     if (adDiv == null) {
                         adDiv = document.createElement('div');
                         adDiv.className = 'ubo-overlay';
-                        adDiv.innerHTML = '<div class="player-ad-notice" style="color: white; background-color: rgba(0, 0, 0, 0.8); position: absolute; top: 0px; left: 0px; padding: 10px;"><p>' + msg + '</p></div>';
+                        adDiv.innerHTML = '<div class="player-ad-notice" style="color: white; background-color: rgba(0, 0, 0, 0.8); position: absolute; top: 0px; left: 0px; padding: 10px;"><p></p></div>';
                         adDiv.style.display = 'none';
+                        adDiv.P = adDiv.querySelector('p');
                         playerRootDiv.appendChild(adDiv);
                     }
                 }
@@ -151,7 +153,7 @@
         }
         // NOTE: midroll ads are intertwined with live segments, always display the banner on midroll ads
         if (haveAdTags && (!textStr.includes(LIVE_SIGNIFIER) || textStr.includes('MIDROLL'))) {
-            postMessage({key:'UboShowAdBanner'});
+            postMessage({key:'UboShowAdBanner',isMidroll:textStr.includes('MIDROLL')});
         } else if ((LastAdUrl && LastAdUrl == url) || LastAdTime < Date.now() - 10000) {
             postMessage({key:'UboHideAdBanner'});
             LastAdTime = 0;
@@ -276,8 +278,17 @@
                     }
                     CurrentChannelNameFromM3U8 = channelName;
                     if (OPT_MODE_PROXY_M3U8) {
-                        url = OPT_MODE_PROXY_M3U8 + channelName;
-                        console.log('Proxy: ' + url);
+                        if (OPT_MODE_PROXY_M3U8_FULL_URL) {
+                            url = OPT_MODE_PROXY_M3U8 + url;
+                            console.log('proxy-m3u8: ' + url);
+                            var opt2 = {};
+                            opt2.headers = [];
+                            opt2.headers['Access-Control-Allow-Origin'] = '*';// This is to appease the currently set proxy
+                            return realFetch(url, opt2);
+                        } else {
+                            url = OPT_MODE_PROXY_M3U8 + channelName;
+                            console.log('proxy-m3u8: ' + url);
+                        }
                     }
                     else if (OPT_MODE_STRIP_AD_SEGMENTS) {
                         return new Promise(async function(resolve, reject) {
